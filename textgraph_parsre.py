@@ -2,7 +2,7 @@ from factual_scene_graph.parser.scene_graph_parser import SceneGraphParser
 from typing import Any
 import json
 import argparse
-
+from tqdm import tqdm
 
 class T5TextGraphParse:
     def __init__(
@@ -106,13 +106,14 @@ graph_parser = T5TextGraphParse()
 res = []
 counter = 0
 
-for count, i in enumerate(file['annotations'], 1):
+annotations = file['annotations']
+for i in tqdm(annotations, desc="Processing captions"):
     ids, image_id, caption = i['id'] , i['image_id'], i['caption']
     
     text_graph = graph_parser.parse_captions([caption])
     res.append({ids: {'image_id': image_id, 'caption': caption, 'graph': text_graph}})
     
-    if count % 100000 == 0:
+    if len(res) >= 100000:
         with open(f'text_graphs_{counter}.json', 'w') as f:
             json.dump(res, f)
         counter += 1
