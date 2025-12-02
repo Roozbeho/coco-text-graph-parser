@@ -137,11 +137,11 @@ for batch_start in tqdm(range(0, len(annotations), BATCH_SIZE), desc="Processing
 
     if len(res) >= CHUNK_SAVE:
         print('saved ', counter)
-        with open(f'/data/comp-vlm-data/coco/text_graphs_files/text_graphs_{counter}.json', 'w') as f:
+        with open(f'text_graphs_{counter}.json', 'w') as f:
             json.dump(res, f)
         counter += 1
         res = {}
 
 if res:
-    with open(f'/data/comp-vlm-data/coco/text_graphs_files/text_graphs_{counter}.json', 'w') as f:
+    with open(f'text_graphs_{counter}.json', 'w') as f:
         json.dump(res, f)
