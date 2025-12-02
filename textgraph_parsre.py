@@ -12,11 +12,11 @@ class T5TextGraphParse:
         refiner_checkpoint_path: str = 'sqlinn/DiscoSG-Refiner-Large-t5-only',
         task: str = "delete_before_insert",          
         device: str = "cuda",        
-        refinement_rounds: int = 4,
-        batch_size: int = 512,
-        beam_size: int = 10,
-        max_input_len=1024,
-        max_output_len=1024,
+        refinement_rounds: int = 3,
+        batch_size: int = 32,
+        beam_size: int = 9,
+        max_input_len=4096,
+        max_output_len=4096,
         merge_strategy: str = "sentence_merge",  
         **kwargs,
     ):
@@ -85,8 +85,10 @@ class T5TextGraphParse:
         graphs = self.parser.parse(captions, beam_size=self.beam_size, refinement_rounds=self.refinement_rounds,
                              task=self.task, batch_size=self.batch_size, return_text=False,
                              max_input_len=self.max_input_len, max_output_len=self.max_output_len)
+        
+        # print(graphs)
         for g in graphs:
-            results.extend(self._convert(g))
+            results.append(self._convert(g))
         
         return results
     
@@ -94,7 +96,10 @@ parser = argparse.ArgumentParser(description="Parse captions into scene graphs")
 parser.add_argument(
     "--caption_file_path", type=str, required=True,
     help="coco caption json file"
-)
+) 
+parser.add_argument("--batch_size", type=int, default=32, required=False, help="batch size")
+parser.add_argument("--max_input_len", type=int, default=4096, required=False, help="max_input_len")
+parser.add_argument("--max_output_len", type=int, default=4096, required=False, help="max_output_len")
 args = parser.parse_args()
 
 
@@ -102,23 +107,41 @@ with open(args.caption_file_path, 'r') as f:
     file = json.load(f)
     
 
-graph_parser = T5TextGraphParse()
-res = []
+graph_parser = T5TextGraphParse(max_input_len=args.max_input_len, max_output_len=args.max_output_len)
+
+BATCH_SIZE = args.batch_size      
+CHUNK_SAVE = 100000    
+
+res = {}
 counter = 0
 
 annotations = file['annotations']
-for i in tqdm(annotations, desc="Processing captions"):
-    ids, image_id, caption = i['id'] , i['image_id'], i['caption']
-    
-    text_graph = graph_parser.parse_captions([caption])
-    res.append({ids: {'image_id': image_id, 'caption': caption, 'graph': text_graph}})
-    
-    if len(res) >= 100000:
-        with open(f'text_graphs_{counter}.json', 'w') as f:
+
+for batch_start in tqdm(range(0, len(annotations), BATCH_SIZE), desc="Processing captions"):
+    batch = annotations[batch_start : batch_start + BATCH_SIZE]
+
+    captions = [ann['caption'] for ann in batch]
+
+    batch_graphs = graph_parser.parse_captions(captions)
+
+    for ann, graph in zip(batch, batch_graphs):
+        ids = ann['id']
+        image_id = ann['image_id']
+        caption = ann['caption']
+
+        res[ids] = {
+                'image_id': image_id,
+                'caption': caption,
+                'graph': graph
+            }
+
+    if len(res) >= CHUNK_SAVE:
+        print('saved ', counter)
+        with open(f'/data/comp-vlm-data/coco/text_graphs_files/text_graphs_{counter}.json', 'w') as f:
             json.dump(res, f)
         counter += 1
-        res = []
-            
+        res = {}
+
 if res:
-    with open(f'text_graphs_{counter}.json', 'w') as f:
+    with open(f'/data/comp-vlm-data/coco/text_graphs_files/text_graphs_{counter}.json', 'w') as f:
         json.dump(res, f)
