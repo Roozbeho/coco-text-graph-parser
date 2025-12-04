@@ -4,6 +4,7 @@ from tqdm import tqdm
 import json
 import argparse
 import torch
+import ray
 from ray.data.llm import build_llm_processor, vLLMEngineProcessorConfig
 import json
 import time
@@ -17,11 +18,12 @@ class NegativeCaptionLLMParser:
                  batch_size: int = 4
             ):
 
-        print(f"Loading vLLM model: {model_id}")
+        print(f"Loading vllm model: {model_id}")
 
         self.config = vLLMEngineProcessorConfig(
             model_source=model_id,  
             engine_kwargs={
+                "trust_remote_code": True,
                 "tensor_parallel_size": tp_size,   
                 "max_model_len": 2048,
                 "enable_chunked_prefill": True,
@@ -107,12 +109,14 @@ class NegativeCaptionLLMParser:
         
         start_time = time.time()
         print('start inference...')
-        results = processor(self.captions[:limit])
-        
+        captions_dataset = ray.data.from_items(self.captions[:limit])
+
+        results = processor(captions_dataset)
+        results_list = results.take_all() 
         print(f"total time is:, {time.time() - start_time:.2f}s")
 
         with open(output_path, "w") as f:
-            json.dump(results, f)
+            json.dump(results_list, f)
 
 
 if __name__ == "__main__":
@@ -132,7 +136,6 @@ if __name__ == "__main__":
     llm_parser = NegativeCaptionLLMParser(
         model_id=args.model_id,
         caption_file_path=args.caption_file_path,
-        dtype=args.torch_dtype,
         tp_size=args.tensor_parallel_size,
         concurrency=args.concurrency,
         batch_size=args.batch_size
