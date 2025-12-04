@@ -6,7 +6,6 @@ import argparse
 import torch
 import ray
 from ray.data.llm import build_llm_processor, vLLMEngineProcessorConfig
-import json
 import time
 
 class NegativeCaptionLLMParser:
@@ -74,7 +73,7 @@ class NegativeCaptionLLMParser:
         caption = row["caption"]
         return dict(
             messages=[
-                {'role': 'user', 'content': NegativeCaptionLLMParser._base_prompt() + f"caption is {caption}"}
+                {'role': 'user', 'content': f"{NegativeCaptionLLMParser._base_prompt()}, caption is {caption}"}
             ],
             sampling_params=dict(
                 temperature=0.0,
